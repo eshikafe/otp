@@ -1,7 +1,8 @@
 .{
-    .name = "otp-generic-linux-build",
+    .name = .otp_generic_linux_build,
+    .fingerprint = 0x494963a927a88c90,
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.2",
 
     // scripts/update-otp.sh keeps the `otp` entry pointed at the latest
     // upstream release automatically; the OpenSSL pin is bumped manually

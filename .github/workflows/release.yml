@@ -12,7 +12,7 @@ on:
     paths: [build.zig, build.zig.zon, "scripts/**"]
 
 env:
-  ZIG_VERSION: 0.13.0             # pin: Zig build API moves between minors;
+  ZIG_VERSION: 0.15.2             # pin: Zig build API moves between minors;
                                   # bump deliberately in its own PR.
 
 jobs:

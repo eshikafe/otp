@@ -27,7 +27,7 @@ const std = @import("std");
 //   zig build verify    glibc symbol gate on the packaged tree
 //   zig build smoke     boot test of the packaged release
 //
-// Tested against Zig 0.13.x std.Build APIs.
+// Tested against Zig 0.15.x std.Build APIs.
 
 pub fn build(b: *std.Build) void {
     // ------------------------------------------------------------------
