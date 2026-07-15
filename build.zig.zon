@@ -1,0 +1,32 @@
+.{
+    .name = "otp-zig-release",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.13.0",
+
+    // Both hashes below are placeholders. Populate them once (with
+    // network access) via:
+    //
+    //   zig fetch --save=otp     https://github.com/erlang/otp/releases/download/OTP-27.3/otp_src_27.3.tar.gz
+    //   zig fetch --save=openssl https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz
+    //
+    // scripts/update-otp.sh keeps the `otp` entry pointed at the latest
+    // upstream release automatically; the OpenSSL pin is bumped manually
+    // (deliberately - crypto bumps should be reviewed by a human).
+    .dependencies = .{
+        .otp = .{
+            .url = "https://github.com/erlang/otp/releases/download/OTP-27.3/otp_src_27.3.tar.gz",
+            .hash = "1220REPLACE_ME_RUN_zig_fetch_save_otp_0000000000000000000000000000",
+        },
+        .openssl = .{
+            .url = "https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz",
+            .hash = "1220REPLACE_ME_RUN_zig_fetch_save_openssl_00000000000000000000000000",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "scripts",
+        "README.md",
+    },
+}

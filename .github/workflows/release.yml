@@ -1,0 +1,164 @@
+name: otp-generic-linux-release
+
+on:
+  schedule:
+    - cron: "17 5 * * *"          # daily poll for new upstream OTP releases
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: [build.zig, build.zig.zon, "scripts/**", ".github/workflows/release.yml"]
+  pull_request:
+    paths: [build.zig, build.zig.zon, "scripts/**"]
+
+env:
+  ZIG_VERSION: 0.13.0             # pin: Zig build API moves between minors;
+                                  # bump deliberately in its own PR.
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Detect a new upstream release and open an automated bump PR.
+  # ------------------------------------------------------------------
+  check-upstream:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Repin to latest OTP
+        id: bump
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          bash scripts/update-otp.sh
+          rc=$?
+          set -e
+          if [ "$rc" = "3" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" = "0" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "vsn=$(cat .otp-latest)" >> "$GITHUB_OUTPUT"
+          else
+            exit "$rc"
+          fi
+
+      - name: Open bump PR
+        if: steps.bump.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: bump/otp-${{ steps.bump.outputs.vsn }}
+          title: "Bump OTP to ${{ steps.bump.outputs.vsn }}"
+          commit-message: "Bump OTP to ${{ steps.bump.outputs.vsn }}"
+          body: |
+            Automated repin to upstream release OTP-${{ steps.bump.outputs.vsn }}.
+            Merging this PR triggers the build; tagging OTP-${{ steps.bump.outputs.vsn }}
+            publishes otp_linux_x86_64_${{ steps.bump.outputs.vsn }}.tar.gz.
+          add-paths: |
+            build.zig.zon
+
+  # ------------------------------------------------------------------
+  # 2. Build the generic release and run both portability gates.
+  # ------------------------------------------------------------------
+  build:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make perl rsync file binutils libncurses-dev
+
+      - name: Build + package
+        run: zig build package -Djobs=$(nproc)
+
+      - name: Gate 1 - glibc symbol floor
+        run: zig build verify
+
+      - name: Gate 2a - smoke test on modern host
+        run: zig build smoke
+
+      - name: Gate 2b - smoke test on glibc 2.17 (manylinux2014)
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash scripts/smoke-test.sh zig-out/dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: otp-generic-linux-x86_64
+          path: |
+            zig-out/dist/otp_linux_x86_64_*.tar.gz
+            zig-out/dist/otp_linux_x86_64_*.tar.gz.sha256
+            zig-out/dist/latest.txt
+
+  # ------------------------------------------------------------------
+  # 3. Publish a GitHub release tagged to match upstream (OTP-<vsn>).
+  #    Runs on push to main when the built version has no release yet.
+  # ------------------------------------------------------------------
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: otp-generic-linux-x86_64
+          path: dist
+
+      - name: Read version
+        id: v
+        run: echo "vsn=$(cat dist/latest.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: OTP-${{ steps.v.outputs.vsn }}
+          name: OTP-${{ steps.v.outputs.vsn }} generic linux x86_64
+          files: |
+            dist/otp_linux_x86_64_*.tar.gz
+            dist/otp_linux_x86_64_*.tar.gz.sha256
+          fail_on_unmatched_files: true
+          make_latest: true
+
+  # ------------------------------------------------------------------
+  # 4. Early-warning canary: build upstream master weekly so major-version
+  #    breakage shows up in a dashboard, not on release day.
+  # ------------------------------------------------------------------
+  canary:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make perl rsync file binutils libncurses-dev autoconf
+      - name: Repin to master snapshot
+        run: |
+          zig fetch --save=otp \
+            "https://github.com/erlang/otp/archive/refs/heads/master.tar.gz"
+      - name: Build
+        run: zig build package -Djobs=$(nproc)
