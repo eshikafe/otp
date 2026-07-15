@@ -16,11 +16,11 @@ The name follows the upstream artifact convention (`otp_src_<vsn>.tar.gz`,
 ## Consuming a release
 
 ```sh
-curl -fLO https://github.com/<you>/otp-zig-release/releases/download/OTP-27.3/otp_linux_x86_64_27.3.tar.gz
-curl -fLO https://github.com/<you>/otp-zig-release/releases/download/OTP-27.3/otp_linux_x86_64_27.3.tar.gz.sha256
-sha256sum -c otp_linux_x86_64_27.3.tar.gz.sha256
-tar -zxf otp_linux_x86_64_27.3.tar.gz
-cd otp_linux_x86_64_27.3
+curl -fLO https://github.com/<you>/otp-zig-release/releases/download/OTP-29.0.3/otp_linux_x86_64_29.0.3.tar.gz
+curl -fLO https://github.com/<you>/otp-zig-release/releases/download/OTP-29.0.3/otp_linux_x86_64_29.0.3.tar.gz.sha256
+sha256sum -c otp_linux_x86_64_29.0.3.tar.gz.sha256
+tar -zxf otp_linux_x86_64_29.0.3.tar.gz
+cd otp_linux_x86_64_29.0.3
 ./Install -minimal "$(pwd)"      # relocatable; run again if you move it
 ./bin/erl
 ```
@@ -37,7 +37,7 @@ capable host (the Erlang bootstrap executes on the build host).
 One-time bootstrap (populates the dependency hashes):
 
 ```sh
-zig fetch --save=otp     https://github.com/erlang/otp/releases/download/OTP-27.3/otp_src_27.3.tar.gz
+zig fetch --save=otp     https://github.com/erlang/otp/releases/download/OTP-29.0.3/otp_src_29.0.3.tar.gz
 zig fetch --save=openssl https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz
 ```
 
