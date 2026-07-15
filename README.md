@@ -1,5 +1,9 @@
 # Zig build system for Erlang/OTP
 
+The objective is to create a generic Linux build of Erlang/OTP
+
+[![release](https://github.com/eshikafe/otp/actions/workflows/release.yml/badge.svg)](https://github.com/eshikafe/otp/actions/workflows/release.yml)
+
 Automated, generic Erlang/OTP binary releases for **x86_64 Linux**, built
 with the **Zig build system** and `zig cc` pinned to `x86_64-linux-gnu.2.17`.
 
