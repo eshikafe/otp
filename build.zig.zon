@@ -1,12 +1,12 @@
 .{
-    .name = .otp_generic_linux_build,
-    .fingerprint = 0x494963a927a88c90,
+    .name = "otp-generic-linux-build",
     .version = "0.1.0",
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.13.0",
 
     // scripts/update-otp.sh keeps the `otp` entry pointed at the latest
-    // upstream release automatically; the OpenSSL pin is bumped manually
-    // (deliberately - crypto bumps should be reviewed by a human).
+    // upstream release automatically; the OpenSSL and ncurses pins are
+    // bumped manually (deliberately - both are security/portability
+    // sensitive and deserve a human review).
     .dependencies = .{
         .otp = .{
             .url = "https://github.com/erlang/otp/releases/download/OTP-29.0.3/otp_src_29.0.3.tar.gz",
@@ -15,6 +15,10 @@
         .openssl = .{
             .url = "https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz",
             .hash = "122036841d37585c881aa56891a05e16e32115c71c09eb831ab1225938603702f08d",
+        },
+        .ncurses = .{
+            .url = "https://ftp.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz",
+            .hash = "12202f0f19e4295c3a71ff0937022132b6554a7d7f4fbe5774508b9f25ea95163bde",
         },
     },
 

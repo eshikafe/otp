@@ -20,12 +20,74 @@ make_toolchain() {
         exit 1
     fi
 
+    # zig cc/c++'s clang frontend has a bug (present on every tested Zig
+    # release, 0.13 through 0.16): feeding 2+ source files to one -M/-MM
+    # invocation together with our versioned glibc-floor target corrupts
+    # compiler-resource-header lookups from the 2nd file onward. It
+    # surfaces differently per Zig version - a mangled target-triple
+    # parse error on 0.15.x/0.16.0, or missing stddef.h/limits.h causing
+    # a downstream "#error" on 0.13.0 - but single-file invocations are
+    # clean on every version tested. erts' Makefiles batch many files
+    # into one -M/-MM call to build a combined depend.mk, so the wrapper
+    # splits those into one zig invocation per file instead.
     cat > "$tooldir/zcc" << WRAP
 #!/usr/bin/env bash
+set -euo pipefail
+args=("\$@")
+is_dep=0
+for a in "\${args[@]}"; do
+    if [ "\$a" = "-M" ] || [ "\$a" = "-MM" ]; then
+        is_dep=1
+        break
+    fi
+done
+if [ "\$is_dep" = "1" ]; then
+    flags=("\${args[@]}")
+    files=()
+    while [ "\${#flags[@]}" -gt 0 ]; do
+        last="\${flags[-1]}"
+        case "\$last" in
+            -*) break ;;
+            *) files=("\$last" "\${files[@]}"); flags=("\${flags[@]:0:\${#flags[@]}-1}") ;;
+        esac
+    done
+    if [ "\${#files[@]}" -gt 1 ]; then
+        for f in "\${files[@]}"; do
+            "$zig" cc -target $target "\${flags[@]}" "\$f"
+        done
+        exit 0
+    fi
+fi
 exec "$zig" cc -target $target "\$@"
 WRAP
     cat > "$tooldir/zcxx" << WRAP
 #!/usr/bin/env bash
+set -euo pipefail
+args=("\$@")
+is_dep=0
+for a in "\${args[@]}"; do
+    if [ "\$a" = "-M" ] || [ "\$a" = "-MM" ]; then
+        is_dep=1
+        break
+    fi
+done
+if [ "\$is_dep" = "1" ]; then
+    flags=("\${args[@]}")
+    files=()
+    while [ "\${#flags[@]}" -gt 0 ]; do
+        last="\${flags[-1]}"
+        case "\$last" in
+            -*) break ;;
+            *) files=("\$last" "\${files[@]}"); flags=("\${flags[@]:0:\${#flags[@]}-1}") ;;
+        esac
+    done
+    if [ "\${#files[@]}" -gt 1 ]; then
+        for f in "\${files[@]}"; do
+            "$zig" c++ -target $target "\${flags[@]}" "\$f"
+        done
+        exit 0
+    fi
+fi
 exec "$zig" c++ -target $target "\$@"
 WRAP
     cat > "$tooldir/zar" << WRAP

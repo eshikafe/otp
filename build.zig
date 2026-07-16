@@ -7,27 +7,32 @@ const std = @import("std");
 //     otp_linux_x86_64_<OTP_VSN>.tar.gz  (+ .sha256)
 //
 // Strategy (phase 1, "orchestrated" build):
-//   * The OTP source tarball and a pinned OpenSSL are Zig package
+//   * The OTP source tarball and pinned OpenSSL/ncurses are Zig package
 //     dependencies (see build.zig.zon). Bumping OTP to the latest
 //     release is a one-line `zig fetch --save=otp <url>` (automated
 //     by scripts/update-otp.sh + CI).
 //   * All native code is compiled with `zig cc` / `zig c++` pinned to
 //     -target x86_64-linux-gnu.2.17, which is what makes the release
 //     "generic" (runs on any distro with glibc >= 2.17, RHEL7+ era).
+//     zig cc searches no host system paths at all, so OpenSSL and
+//     ncurses (libtinfo, for the shell's line editing) are both built
+//     from source with the same pinned toolchain rather than linked
+//     from the host - otherwise the release would depend on whatever
+//     happens to be installed on the build machine.
 //   * OTP's own configure/make drive the compile; build.zig owns the
-//     step graph, toolchain pinning, OpenSSL, packaging, naming, and
-//     the glibc-symbol portability gate.
+//     step graph, toolchain pinning, OpenSSL/ncurses, packaging,
+//     naming, and the glibc-symbol portability gate.
 //
 // Native ERTS-in-Zig compilation (phase 2) can later replace the
 // `make` step without changing the outer steps, names, or CI.
 //
 // Steps:
-//   zig build package   (default) stage -> openssl -> configure ->
+//   zig build package   (default) stage -> openssl+ncurses -> configure ->
 //                       compile -> release -> package
 //   zig build verify    glibc symbol gate on the packaged tree
 //   zig build smoke     boot test of the packaged release
 //
-// Tested against Zig 0.15.x std.Build APIs.
+// Tested against Zig 0.13.x std.Build APIs.
 
 pub fn build(b: *std.Build) void {
     // ------------------------------------------------------------------
@@ -58,11 +63,14 @@ pub fn build(b: *std.Build) void {
     // ------------------------------------------------------------------
     const otp = b.dependency("otp", .{});
     const openssl = b.dependency("openssl", .{});
+    const ncurses = b.dependency("ncurses", .{});
 
     // Everything mutable happens under build-work/ (gitignored).
     const work_otp = "build-work/otp";
     const work_ssl = "build-work/openssl";
     const ssl_prefix = "build-work/openssl-install";
+    const work_ncurses = "build-work/ncurses";
+    const ncurses_prefix = "build-work/ncurses-install";
     const release_root = "build-work/release";
     const out_dir = "zig-out/dist";
 
@@ -81,8 +89,14 @@ pub fn build(b: *std.Build) void {
     stage_ssl.addDirectoryArg(openssl.path("."));
     stage_ssl.addArg(work_ssl);
 
+    const stage_ncurses = b.addSystemCommand(&.{ "bash", "scripts/stage.sh" });
+    stage_ncurses.setCwd(b.path("."));
+    stage_ncurses.addDirectoryArg(ncurses.path("."));
+    stage_ncurses.addArg(work_ncurses);
+
     // ------------------------------------------------------------------
-    // 2. Static OpenSSL built with the same zig-cc target
+    // 2. Static OpenSSL and static ncurses (libtinfo), both built with
+    //    the same zig-cc target so the release stays host-independent.
     // ------------------------------------------------------------------
     const build_ssl = b.addSystemCommand(&.{
         "bash",           "scripts/build-openssl.sh",
@@ -92,6 +106,14 @@ pub fn build(b: *std.Build) void {
     build_ssl.setCwd(b.path("."));
     build_ssl.step.dependOn(&stage_ssl.step);
 
+    const build_ncurses = b.addSystemCommand(&.{
+        "bash",           "scripts/build-ncurses.sh",
+        work_ncurses,     ncurses_prefix,
+        target_triple,    jobs_arg,
+    });
+    build_ncurses.setCwd(b.path("."));
+    build_ncurses.step.dependOn(&stage_ncurses.step);
+
     // ------------------------------------------------------------------
     // 3. configure (probes run through zig cc, so results reflect the
     //    pinned target, and host == target arch so run-tests are valid)
@@ -100,9 +122,11 @@ pub fn build(b: *std.Build) void {
         "bash",        "scripts/configure.sh",
         work_otp,      target_triple,
         ssl_prefix,    if (static_ssl) "static" else "system",
+        ncurses_prefix,
     });
     configure.setCwd(b.path("."));
     configure.step.dependOn(&stage_otp.step);
+    configure.step.dependOn(&build_ncurses.step);
     if (static_ssl) configure.step.dependOn(&build_ssl.step);
 
     // ------------------------------------------------------------------
@@ -161,6 +185,7 @@ pub fn build(b: *std.Build) void {
     // Convenience: individual phases addressable for debugging.
     b.step("stage", "Stage sources into build-work/").dependOn(&stage_otp.step);
     b.step("openssl", "Build the pinned static OpenSSL").dependOn(&build_ssl.step);
+    b.step("ncurses", "Build the pinned static ncurses (libtinfo)").dependOn(&build_ncurses.step);
     b.step("configure", "Run OTP configure with the zig-cc toolchain").dependOn(&configure.step);
     b.step("compile", "Run the OTP compile").dependOn(&compile.step);
     b.step("release", "Stage the OTP release tree").dependOn(&release.step);
