@@ -30,10 +30,37 @@ make_toolchain() {
     # clean on every version tested. erts' Makefiles batch many files
     # into one -M/-MM call to build a combined depend.mk, so the wrapper
     # splits those into one zig invocation per file instead.
+    # zig cc/c++ also can't generate precompiled headers (-x c++-header
+    # -c ... -o *.gch): it always fails with "ld.lld: error: ...: unknown
+    # file type", reproduced even with a bare `zig c++` call and a
+    # trivial one-line header, so it's a genuine upstream limitation, not
+    # a flag/target issue. Clang treats a missing or invalid PCH as
+    # optional - it falls back to textual inclusion of the plain header
+    # with just a warning - so the wrapper skips real PCH generation and
+    # drops an empty placeholder at the requested .gch path instead.
     cat > "$tooldir/zcc" << WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 args=("\$@")
+pch_out=""
+prev=""
+for a in "\${args[@]}"; do
+    if [ "\$prev" = "-o" ]; then
+        pch_out="\$a"
+    fi
+    prev="\$a"
+done
+case " \${args[*]} " in
+    *" c-header "*|*" c++-header "*)
+        case "\$pch_out" in
+            *.gch)
+                mkdir -p "\$(dirname "\$pch_out")"
+                : > "\$pch_out"
+                exit 0
+                ;;
+        esac
+        ;;
+esac
 is_dep=0
 for a in "\${args[@]}"; do
     if [ "\$a" = "-M" ] || [ "\$a" = "-MM" ]; then
@@ -64,6 +91,25 @@ WRAP
 #!/usr/bin/env bash
 set -euo pipefail
 args=("\$@")
+pch_out=""
+prev=""
+for a in "\${args[@]}"; do
+    if [ "\$prev" = "-o" ]; then
+        pch_out="\$a"
+    fi
+    prev="\$a"
+done
+case " \${args[*]} " in
+    *" c-header "*|*" c++-header "*)
+        case "\$pch_out" in
+            *.gch)
+                mkdir -p "\$(dirname "\$pch_out")"
+                : > "\$pch_out"
+                exit 0
+                ;;
+        esac
+        ;;
+esac
 is_dep=0
 for a in "\${args[@]}"; do
     if [ "\$a" = "-M" ] || [ "\$a" = "-MM" ]; then
