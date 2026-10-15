@@ -9,8 +9,8 @@
     // sensitive and deserve a human review).
     .dependencies = .{
         .otp = .{
-            .url = "https://github.com/erlang/otp/releases/download/OTP-29.0.3/otp_src_29.0.3.tar.gz",
-            .hash = "1220e10991c002205e06bd93a85c9d56e80da2c71a5e21e6a72daac711536c5b82a8",
+            .url = "https://github.com/erlang/otp/releases/download/OTP-29.1.2/otp_src_29.1.2.tar.gz",
+            .hash = "122087ed277e94b516207a54482773a278c0ad14f0222b217c2744d8912d0ca8974c",
         },
         .openssl = .{
             .url = "https://github.com/openssl/openssl/releases/download/openssl-3.3.1/openssl-3.3.1.tar.gz",
